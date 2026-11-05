@@ -83,7 +83,7 @@ Bonus: `models/Constants.swift` to change default setting values.
 ## Workflow
 
 - Open `boringNotch.xcodeproj` in Xcode → ⌘R to build & run, ⌘. to stop.
-- Signing: the project signs macOS builds ad-hoc (`CODE_SIGN_IDENTITY[sdk=macosx*] = "-"`), so no Apple ID / team is needed to run locally.
+- Signing: builds are signed with a self-signed certificate "Dynamic Island Local" in my login keychain (no Apple ID). It keeps the app's identity stable, so Accessibility and other permissions survive rebuilds. On a new Mac, create that certificate first or builds fail. Hardened runtime is off (needed for local signing).
 - CLI build: `xcodebuild -project boringNotch.xcodeproj -scheme boringNotch -configuration Debug -derivedDataPath build build` → app at `build/Build/Products/Debug/Boring Notch.app` (`build/` is git-ignored).
 - Pull upstream updates: `git fetch upstream && git merge upstream/main` (on `my-version`).
 
