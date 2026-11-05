@@ -1250,7 +1250,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 2.7.3;
-				PRODUCT_BUNDLE_IDENTIFIER = theboringteam.boringnotch;
+				PRODUCT_BUNDLE_IDENTIFIER = rybakrisko.dynamicisland;
 				PRODUCT_NAME = "Dynamic Island";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -1304,7 +1304,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 2.7.3;
-				PRODUCT_BUNDLE_IDENTIFIER = theboringteam.boringnotch;
+				PRODUCT_BUNDLE_IDENTIFIER = rybakrisko.dynamicisland;
 				PRODUCT_NAME = "Dynamic Island";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
