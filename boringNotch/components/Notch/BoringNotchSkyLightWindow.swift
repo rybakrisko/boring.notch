@@ -109,6 +109,7 @@ class BoringNotchSkyLightWindow: NSPanel {
     
     private var observers: Set<AnyCancellable> = []
     
-    override var canBecomeKey: Bool { false }
+    // Accept keyboard focus only while a Claude question is showing (for the "Other…" field)
+    override var canBecomeKey: Bool { ClaudeBridge.shared.current != nil }
     override var canBecomeMain: Bool { false }
 }

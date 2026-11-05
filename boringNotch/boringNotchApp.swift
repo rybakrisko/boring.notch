@@ -67,6 +67,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var isScreenLocked: Bool = false
     private var windowScreenDidChangeObserver: Any?
     private var dragDetectors: [String: DragDetector] = [:] // UUID -> DragDetector
+    private var claudeBridgeObserver: AnyCancellable?
+    private var claudeViewModel: BoringViewModel?
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return false
@@ -421,6 +423,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         setupDragDetectors()
+        setupClaudeBridge()
 
         if coordinator.firstLaunch {
             DispatchQueue.main.async {
@@ -436,6 +439,55 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         previousScreens = NSScreen.screens
+    }
+
+    // MARK: - Claude bridge
+
+    private func setupClaudeBridge() {
+        ClaudeBridge.shared.start()
+        claudeBridgeObserver = ClaudeBridge.shared.$current
+            .map { $0?.id }
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] requestID in
+                Task { @MainActor in
+                    self?.claudeRequestChanged(isShowing: requestID != nil)
+                }
+            }
+    }
+
+    /// Opens the notch on the display under the mouse when Claude asks something,
+    /// and closes it again once the question is answered.
+    @MainActor
+    private func claudeRequestChanged(isShowing: Bool) {
+        guard isShowing else {
+            claudeViewModel?.close()
+            claudeViewModel = nil
+            adjustWindowPosition()
+            return
+        }
+
+        let mouseLocation = NSEvent.mouseLocation
+        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(mouseLocation) }) ?? NSScreen.main else {
+            return
+        }
+
+        var viewModel = vm
+        if Defaults[.showOnAllDisplays] {
+            if let uuid = screen.displayUUID, let screenViewModel = viewModels[uuid] {
+                viewModel = screenViewModel
+            }
+        } else if let window, window.screen != screen {
+            vm.screenUUID = screen.displayUUID
+            positionWindow(window, on: screen)
+        }
+
+        closeNotchTask?.cancel()
+        closeNotchTask = nil
+        withAnimation(.spring(response: 0.42, dampingFraction: 0.8)) {
+            viewModel.open()
+        }
+        claudeViewModel = viewModel
     }
 
     func playWelcomeSound() {
