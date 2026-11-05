@@ -147,7 +147,14 @@ class BoringViewCoordinator: ObservableObject {
 
                     if change.newValue {
                         self.hudEnableTask = Task { @MainActor in
-                            let granted = await XPCHelperClient.shared.ensureAccessibilityAuthorization(promptIfNeeded: true)
+                            var granted = await XPCHelperClient.shared.ensureAccessibilityAuthorization(promptIfNeeded: true)
+                            // Give the user time to approve in System Settings before giving up
+                            // (previously this turned the setting off after half a second).
+                            for _ in 0..<120 where !granted {
+                                try? await Task.sleep(for: .seconds(1))
+                                if Task.isCancelled { return }
+                                granted = await XPCHelperClient.shared.isAccessibilityAuthorized()
+                            }
                             if Task.isCancelled { return }
 
                             if granted {
