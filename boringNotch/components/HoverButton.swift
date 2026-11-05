@@ -25,9 +25,9 @@ struct HoverButton: View {
                 .contentShape(Rectangle())
                 .frame(width: size, height: size)
                 .overlay {
-                    Capsule()
-                        .fill(isHovering ? Color.gray.opacity(0.2) : .clear)
+                    Color.clear
                         .frame(width: size, height: size)
+                        .modifier(HoverGlass(isHovering: isHovering))
                         .overlay {
                             Image(systemName: icon)
                                 .foregroundColor(iconColor)
@@ -41,6 +41,19 @@ struct HoverButton: View {
             withAnimation(.smooth(duration: 0.3)) {
                 isHovering = hovering
             }
+        }
+    }
+}
+
+/// Liquid Glass capsule while hovered; nothing otherwise.
+private struct HoverGlass: ViewModifier {
+    let isHovering: Bool
+
+    func body(content: Content) -> some View {
+        if isHovering {
+            content.liquidGlass(in: Capsule(), interactive: true)
+        } else {
+            content
         }
     }
 }

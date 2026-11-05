@@ -358,6 +358,9 @@ struct Charge: View {
                 Defaults.Toggle(key: .showPowerStatusNotifications) {
                     Text("Show power status notifications")
                 }
+                Defaults.Toggle(key: .showBluetoothAudioNotifications) {
+                    Text("Show AirPods & headphones when they connect")
+                }
             } header: {
                 Text("General")
             }

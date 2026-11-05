@@ -34,8 +34,8 @@ struct TabSelectionView: View {
                     .foregroundStyle(tab.view == coordinator.currentView ? .white : .gray)
                     .background {
                         if tab.view == coordinator.currentView {
-                            Capsule()
-                                .fill(coordinator.currentView == tab.view ? Color(nsColor: .secondarySystemFill) : Color.clear)
+                            Color.clear
+                                .liquidGlass(in: Capsule())
                                 .matchedGeometryEffect(id: "capsule", in: animation)
                         } else {
                             Capsule()

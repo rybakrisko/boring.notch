@@ -424,6 +424,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         setupDragDetectors()
         setupClaudeBridge()
+        BluetoothAudioManager.shared.start()
 
         if coordinator.firstLaunch {
             DispatchQueue.main.async {

@@ -135,7 +135,7 @@ private struct QuestionsContent: View {
                             .font(.system(size: 12, weight: .medium))
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
-                            .background(Capsule().fill(selected ? claudeOrange : .white.opacity(0.12)))
+                            .liquidGlass(in: Capsule(), tint: selected ? claudeOrange : nil, interactive: true)
                             .foregroundStyle(.white)
                     }
                     .buttonStyle(.plain)
@@ -229,7 +229,7 @@ private struct ClaudeButton: View {
                 .font(.system(size: 12, weight: style == .primary ? .semibold : .medium))
                 .padding(.horizontal, style == .plain ? 4 : 12)
                 .padding(.vertical, 5)
-                .background(Capsule().fill(background))
+                .modifier(ClaudeButtonBackground(style: style))
                 .foregroundStyle(style == .plain ? .gray : .white)
         }
         .buttonStyle(.plain)
@@ -237,11 +237,16 @@ private struct ClaudeButton: View {
         .opacity(disabled ? 0.4 : 1)
     }
 
-    private var background: Color {
+}
+
+private struct ClaudeButtonBackground: ViewModifier {
+    let style: ClaudeButton.Style
+
+    func body(content: Content) -> some View {
         switch style {
-        case .primary: return claudeOrange
-        case .secondary: return .white.opacity(0.12)
-        case .plain: return .clear
+        case .primary: content.liquidGlass(in: Capsule(), tint: claudeOrange, interactive: true)
+        case .secondary: content.liquidGlass(in: Capsule(), interactive: true)
+        case .plain: content
         }
     }
 }
