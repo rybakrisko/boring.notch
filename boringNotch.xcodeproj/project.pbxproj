@@ -1234,8 +1234,8 @@
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = boringNotch/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Boring Notch";
-				INFOPLIST_KEY_CFBundleName = "Boring Notch";
+				INFOPLIST_KEY_CFBundleDisplayName = "Dynamic Island";
+				INFOPLIST_KEY_CFBundleName = "Dynamic Island";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_LSBackgroundOnly = NO;
 				INFOPLIST_KEY_LSUIElement = YES;
@@ -1251,7 +1251,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 2.7.3;
 				PRODUCT_BUNDLE_IDENTIFIER = theboringteam.boringnotch;
-				PRODUCT_NAME = "Boring Notch";
+				PRODUCT_NAME = "Dynamic Island";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_STRICT_CONCURRENCY = targeted;
@@ -1288,8 +1288,8 @@
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = boringNotch/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Boring Notch";
-				INFOPLIST_KEY_CFBundleName = "Boring Notch";
+				INFOPLIST_KEY_CFBundleDisplayName = "Dynamic Island";
+				INFOPLIST_KEY_CFBundleName = "Dynamic Island";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_LSBackgroundOnly = NO;
 				INFOPLIST_KEY_LSUIElement = YES;
@@ -1305,7 +1305,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 2.7.3;
 				PRODUCT_BUNDLE_IDENTIFIER = theboringteam.boringnotch;
-				PRODUCT_NAME = "Boring Notch";
+				PRODUCT_NAME = "Dynamic Island";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_STRICT_CONCURRENCY = targeted;
