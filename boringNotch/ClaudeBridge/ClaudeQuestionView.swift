@@ -18,11 +18,9 @@ struct ClaudeQuestionView: View {
             titleRow
             switch request.kind {
             case .permission(let tool, let detail):
-                PermissionContent(tool: tool, detail: detail)
+                PermissionContent(tool: tool, detail: detail, alwaysAllowRule: request.alwaysAllowDescription)
             case .questions(let questions):
                 QuestionsContent(questions: questions)
-            case .notice(let message):
-                NoticeContent(message: message)
             }
         }
         .padding(.horizontal, 8)
@@ -41,11 +39,6 @@ struct ClaudeQuestionView: View {
                 .foregroundStyle(.gray)
                 .lineLimit(1)
             Spacer()
-            if bridge.queuedCount > 0 {
-                Text("+\(bridge.queuedCount) more")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.gray)
-            }
         }
         .foregroundStyle(.white)
     }
@@ -54,7 +47,6 @@ struct ClaudeQuestionView: View {
         switch request.kind {
         case .permission: return "Claude needs permission"
         case .questions: return "Claude has a question"
-        case .notice: return "Claude is waiting"
         }
     }
 }
@@ -64,6 +56,8 @@ struct ClaudeQuestionView: View {
 private struct PermissionContent: View {
     let tool: String
     let detail: String
+    /// e.g. `Bash(npm test:*)`; empty when Claude offers no "always allow" rule.
+    let alwaysAllowRule: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -86,6 +80,10 @@ private struct PermissionContent: View {
                 ClaudeButton("Answer in Claude", style: .plain) { ClaudeBridge.shared.answerInClaude() }
                 Spacer()
                 ClaudeButton("Deny", style: .secondary) { ClaudeBridge.shared.deny() }
+                if !alwaysAllowRule.isEmpty {
+                    ClaudeButton("Always allow", style: .secondary) { ClaudeBridge.shared.alwaysAllow() }
+                        .help("Don't ask again for \(alwaysAllowRule)")
+                }
                 ClaudeButton("Allow", style: .primary) { ClaudeBridge.shared.allow() }
             }
         }
@@ -184,25 +182,6 @@ private struct QuestionsContent: View {
 
     private var answers: [String: String] {
         Dictionary(uniqueKeysWithValues: questions.indices.map { (questions[$0].text, answerText(for: $0)) })
-    }
-}
-
-// MARK: - Notice
-
-private struct NoticeContent: View {
-    let message: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(message)
-                .font(.system(size: 13))
-                .foregroundStyle(.white)
-            Spacer(minLength: 0)
-            HStack {
-                Spacer()
-                ClaudeButton("Dismiss", style: .secondary) { ClaudeBridge.shared.dismiss() }
-            }
-        }
     }
 }
 

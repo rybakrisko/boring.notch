@@ -6,6 +6,7 @@
 //  the user's answer back to the waiting hook (see claude-bridge/ in the repo root).
 //
 
+import AppKit
 import Combine
 import Foundation
 
@@ -26,22 +27,39 @@ enum ClaudeRequestKind {
     case permission(tool: String, detail: String)
     /// Claude asked one or more multiple-choice questions (AskUserQuestion).
     case questions([ClaudeQuestion])
-    /// Informational only, e.g. "Claude is waiting for your input".
-    case notice(String)
 }
 
 final class ClaudeRequest: Identifiable {
     let id = UUID()
     let project: String
     let kind: ClaudeRequestKind
+    /// Bundle ID of the app the Claude session runs in (Claude desktop, Terminal…).
+    let host: String
+    /// Claude's suggested "always allow" rules, passed back as-is.
+    let alwaysAllowRules: [[String: Any]]
     fileprivate let toolInput: [String: Any]
     fileprivate let connection: ClaudeBridgeConnection?
 
-    fileprivate init(project: String, kind: ClaudeRequestKind, toolInput: [String: Any] = [:], connection: ClaudeBridgeConnection?) {
+    fileprivate init(project: String, kind: ClaudeRequestKind, host: String, alwaysAllowRules: [[String: Any]] = [],
+                     toolInput: [String: Any] = [:], connection: ClaudeBridgeConnection?) {
         self.project = project
         self.kind = kind
+        self.host = host
+        self.alwaysAllowRules = alwaysAllowRules
         self.toolInput = toolInput
         self.connection = connection
+    }
+
+    /// Short description of the "always allow" rule, e.g. `Bash(npm test:*)`.
+    var alwaysAllowDescription: String {
+        alwaysAllowRules
+            .flatMap { $0["rules"] as? [[String: Any]] ?? [] }
+            .map { rule in
+                let tool = rule["toolName"] as? String ?? ""
+                if let content = rule["ruleContent"] as? String, !content.isEmpty { return "\(tool)(\(content))" }
+                return tool
+            }
+            .joined(separator: ", ")
     }
 }
 
@@ -50,9 +68,10 @@ final class ClaudeBridge: ObservableObject {
     static let shared = ClaudeBridge()
     static let port: UInt16 = 47823
 
+    /// Used when the hook doesn't say which app the session runs in.
+    private static let claudeDesktopBundleID = "com.anthropic.claudefordesktop"
     /// Unanswered requests hand back to Claude's own prompt after this long.
     private static let answerTimeout: Duration = .seconds(300)
-    private static let noticeDuration: Duration = .seconds(8)
 
     @Published private(set) var current: ClaudeRequest?
     @Published private(set) var queuedCount = 0
@@ -62,58 +81,65 @@ final class ClaudeBridge: ObservableObject {
     }
     private var server: ClaudeBridgeServer?
     private var timeoutTask: Task<Void, Never>?
+    private var activationObserver: NSObjectProtocol?
 
     private init() {}
 
     func start() {
         guard server == nil else { return }
         do {
-            server = try ClaudeBridgeServer(port: Self.port) { path, body, connection in
+            server = try ClaudeBridgeServer(port: Self.port) { path, host, body, connection in
                 Task { @MainActor in
-                    ClaudeBridge.shared.receive(path: path, body: body, connection: connection)
+                    ClaudeBridge.shared.receive(path: path, host: host, body: body, connection: connection)
                 }
             }
             server?.start()
         } catch {
             print("ClaudeBridge: could not start server: \(error)")
         }
+
+        // If the user switches to the app the question came from, answer it there instead.
+        activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
+        ) { notification in
+            let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            guard let bundleID = app?.bundleIdentifier else { return }
+            Task { @MainActor in ClaudeBridge.shared.handBack(toAppWithBundleID: bundleID) }
+        }
     }
 
     // MARK: - Incoming hook events
 
-    private func receive(path: String, body: Data, connection: ClaudeBridgeConnection) {
-        guard let json = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any] else {
+    private func receive(path: String, host: String, body: Data, connection: ClaudeBridgeConnection) {
+        // Only permission prompts and questions are shown; everything else
+        // (e.g. "Claude is waiting for your input" notifications) is ignored.
+        guard path == "/permission",
+              let json = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any] else {
             connection.respond(nil)
             return
         }
+        let host = host.isEmpty ? Self.claudeDesktopBundleID : host
+
+        // The user is already looking at Claude — let it show its own prompt.
+        if NSWorkspace.shared.frontmostApplication?.bundleIdentifier == host {
+            connection.respond(nil)
+            return
+        }
+
         let cwd = json["cwd"] as? String ?? ""
         let project = cwd.isEmpty ? "Claude" : URL(fileURLWithPath: cwd).lastPathComponent
-
-        switch path {
-        case "/permission":
-            guard let request = permissionRequest(from: json, project: project, connection: connection) else {
-                connection.respond(nil)
-                return
-            }
-            connection.onClose = { [id = request.id] in
-                // Hook was killed (e.g. the user pressed Esc in Claude) — drop the question.
-                Task { @MainActor in ClaudeBridge.shared.remove(id: id) }
-            }
-            enqueue(request)
-
-        case "/notify":
+        guard let request = permissionRequest(from: json, project: project, host: host, connection: connection) else {
             connection.respond(nil)
-            let type = json["notification_type"] as? String ?? ""
-            guard ["idle_prompt", "agent_needs_input"].contains(type) else { return }
-            let message = json["message"] as? String ?? "Claude is waiting for your input"
-            enqueue(ClaudeRequest(project: project, kind: .notice(message), connection: nil))
-
-        default:
-            connection.respond(nil)
+            return
         }
+        connection.onClose = { [id = request.id] in
+            // Hook was killed (e.g. the user answered or pressed Esc in Claude) — drop the question.
+            Task { @MainActor in ClaudeBridge.shared.remove(id: id) }
+        }
+        enqueue(request)
     }
 
-    private func permissionRequest(from json: [String: Any], project: String, connection: ClaudeBridgeConnection) -> ClaudeRequest? {
+    private func permissionRequest(from json: [String: Any], project: String, host: String, connection: ClaudeBridgeConnection) -> ClaudeRequest? {
         let tool = json["tool_name"] as? String ?? "a tool"
         let input = json["tool_input"] as? [String: Any] ?? [:]
 
@@ -130,14 +156,22 @@ final class ClaudeBridge: ObservableObject {
                 )
             }
             guard !questions.isEmpty else { return nil }
-            return ClaudeRequest(project: project, kind: .questions(questions), toolInput: input, connection: connection)
+            return ClaudeRequest(project: project, kind: .questions(questions), host: host, toolInput: input, connection: connection)
 
         case "ExitPlanMode":
             // Plans are long; review them in Claude itself.
             return nil
 
         default:
-            return ClaudeRequest(project: project, kind: .permission(tool: tool, detail: Self.detail(for: input)), toolInput: input, connection: connection)
+            let suggestions = json["permission_suggestions"] as? [[String: Any]] ?? []
+            return ClaudeRequest(
+                project: project,
+                kind: .permission(tool: tool, detail: Self.detail(for: input)),
+                host: host,
+                alwaysAllowRules: suggestions.filter { ($0["behavior"] as? String) == "allow" },
+                toolInput: input,
+                connection: connection
+            )
         }
     }
 
@@ -164,10 +198,8 @@ final class ClaudeBridge: ObservableObject {
     private func show(_ request: ClaudeRequest) {
         current = request
         timeoutTask?.cancel()
-        let isNotice: Bool
-        if case .notice = request.kind { isNotice = true } else { isNotice = false }
         timeoutTask = Task { [id = request.id] in
-            try? await Task.sleep(for: isNotice ? Self.noticeDuration : Self.answerTimeout)
+            try? await Task.sleep(for: Self.answerTimeout)
             guard !Task.isCancelled, self.current?.id == id else { return }
             self.finish(with: nil)
         }
@@ -178,6 +210,17 @@ final class ClaudeBridge: ObservableObject {
             finish(with: nil)
         } else {
             queue.removeAll { $0.id == id }
+        }
+    }
+
+    /// Returns every request from `bundleID` to Claude's own prompt.
+    private func handBack(toAppWithBundleID bundleID: String) {
+        for request in queue where request.host == bundleID {
+            request.connection?.respond(nil)
+        }
+        queue.removeAll { $0.host == bundleID }
+        if current?.host == bundleID {
+            finish(with: nil)
         }
     }
 
@@ -197,6 +240,12 @@ final class ClaudeBridge: ObservableObject {
         finish(with: Self.decision(["behavior": "allow"]))
     }
 
+    /// Allows this request and adds Claude's suggested rule so it isn't asked again.
+    func alwaysAllow() {
+        guard let rules = current?.alwaysAllowRules, !rules.isEmpty else { return allow() }
+        finish(with: Self.decision(["behavior": "allow", "updatedPermissions": rules]))
+    }
+
     func deny() {
         finish(with: Self.decision(["behavior": "deny", "message": "The user denied this from Dynamic Island."]))
     }
@@ -211,10 +260,6 @@ final class ClaudeBridge: ObservableObject {
 
     /// Hand the request back so Claude shows its normal prompt.
     func answerInClaude() {
-        finish(with: nil)
-    }
-
-    func dismiss() {
         finish(with: nil)
     }
 

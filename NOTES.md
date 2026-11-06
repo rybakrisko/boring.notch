@@ -90,6 +90,6 @@ Bonus: `models/Constants.swift` to change default setting values.
 ## Claude questions in the island (my addition)
 
 - `boringNotch/ClaudeBridge/` — `ClaudeBridgeServer.swift` (tiny HTTP server on `127.0.0.1:47823`), `ClaudeBridge.swift` (queue, timeouts, hook replies), `ClaudeQuestionView.swift` (the UI).
-- `claude-bridge/dynamic-island-hook.sh` — Claude Code hook; `permission` for PermissionRequest (waits for an answer), `notify` for Notification.
+- `claude-bridge/dynamic-island-hook.sh` — Claude Code PermissionRequest hook (waits for an answer). It sends the session's host app (`__CFBundleIdentifier`); the island skips the popup while that app is in front and hands the question back if you switch to it. Only permission prompts and questions are shown; offers "Always allow" when Claude suggests a rule.
 - Opens on the display under the mouse (`claudeRequestChanged` in `boringNotchApp.swift`); stays open until answered (`BoringViewModel.close()`).
 - Falls back to Claude's own prompt on "Answer in Claude", after 5 min, or if the app isn't running.

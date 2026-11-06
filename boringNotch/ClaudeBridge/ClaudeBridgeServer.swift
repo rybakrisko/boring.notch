@@ -24,12 +24,12 @@ final class ClaudeBridgeConnection {
         self.queue = queue
     }
 
-    func start(onRequest: @escaping (_ path: String, _ body: Data, _ connection: ClaudeBridgeConnection) -> Void) {
+    func start(onRequest: @escaping (_ path: String, _ host: String, _ body: Data, _ connection: ClaudeBridgeConnection) -> Void) {
         connection.start(queue: queue)
         receive(onRequest: onRequest)
     }
 
-    private func receive(onRequest: @escaping (String, Data, ClaudeBridgeConnection) -> Void) {
+    private func receive(onRequest: @escaping (String, String, Data, ClaudeBridgeConnection) -> Void) {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 65_536) { [weak self] data, _, isComplete, error in
             guard let self else { return }
             if let data { self.buffer.append(data) }
@@ -42,9 +42,9 @@ final class ClaudeBridgeConnection {
                     self.didParse = true
                     self.send(status: status, body: nil)
                     return
-                case .request(let path, let body):
+                case .request(let path, let host, let body):
                     self.didParse = true
-                    onRequest(path, body, self)
+                    onRequest(path, host, body, self)
                 }
             }
 
@@ -60,7 +60,7 @@ final class ClaudeBridgeConnection {
     private enum ParseResult {
         case incomplete
         case invalid(String)
-        case request(path: String, body: Data)
+        case request(path: String, host: String, body: Data)
     }
 
     private func parse() -> ParseResult {
@@ -75,12 +75,15 @@ final class ClaudeBridgeConnection {
         guard requestLine.count >= 2, requestLine[0] == "POST" else { return .invalid("405 Method Not Allowed") }
 
         var contentLength = 0
+        var host = ""
         for line in lines.dropFirst() {
             let parts = line.split(separator: ":", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
             guard parts.count == 2 else { continue }
             switch parts[0].lowercased() {
             case "content-length":
                 contentLength = Int(parts[1]) ?? 0
+            case "x-claude-host":
+                host = parts[1]
             case "origin":
                 // Browsers always send Origin; the hook script (curl) never does.
                 // Rejecting it stops web pages from posting fake questions.
@@ -93,7 +96,7 @@ final class ClaudeBridgeConnection {
         let bodyStart = headerEnd.upperBound
         guard buffer.count - bodyStart >= contentLength else { return .incomplete }
         let body = buffer.subdata(in: bodyStart..<(bodyStart + contentLength))
-        return .request(path: String(requestLine[1]), body: body)
+        return .request(path: String(requestLine[1]), host: host, body: body)
     }
 
     /// Sends the reply. A nil body means "no decision" (Claude shows its own prompt).
@@ -118,7 +121,7 @@ final class ClaudeBridgeServer {
     private let queue = DispatchQueue(label: "ClaudeBridgeServer")
     private var connections: [ObjectIdentifier: ClaudeBridgeConnection] = [:]
 
-    init(port: UInt16, onRequest: @escaping (String, Data, ClaudeBridgeConnection) -> Void) throws {
+    init(port: UInt16, onRequest: @escaping (String, String, Data, ClaudeBridgeConnection) -> Void) throws {
         let parameters = NWParameters.tcp
         parameters.allowLocalEndpointReuse = true
         parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: port)!)
